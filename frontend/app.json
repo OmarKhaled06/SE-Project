@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "CampusCare",
+    "slug": "campuscare",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "campuscare",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.campuscare.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a55ddad5-8173-4480-9b13-f5f352240b80"
+      }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}
