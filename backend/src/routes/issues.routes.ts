@@ -2,6 +2,9 @@ import { Router } from 'express';
 import * as c from '../controllers/issues.controller';
 import { requireAuth } from '../middleware/auth';
 import { upload } from '../middleware/upload';
+// ======================
+// Issue CRUD Routes
+// ======================
 const r = Router();
 r.use(requireAuth);
 r.get('/', c.list);
