@@ -7,6 +7,12 @@ import { upload } from '../middleware/upload';
 // ======================
 const r = Router();
 r.use(requireAuth);
+/**
+ * @swagger
+ * /api/issues:
+ *   get:
+ *     summary: Retrieve all issues
+ */
 r.get('/', c.list);
 r.get('/my', c.listMine);
 r.get('/:id', c.get);
