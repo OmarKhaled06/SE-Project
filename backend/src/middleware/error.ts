@@ -1,3 +1,7 @@
+// ======================
+// JWT Authentication Middleware
+// ======================
+
 import { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {

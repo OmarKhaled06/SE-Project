@@ -1,3 +1,7 @@
+// ======================
+// JWT Authentication Middleware
+// ======================
+
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../config/db';
