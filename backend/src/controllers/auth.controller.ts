@@ -13,10 +13,11 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const exists = await db.user.findUnique({ where: { email: data.email } });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
     const passwordHash = await bcrypt.hash(data.password, 10);
+    const role = data.role ?? 'MEMBER';
     const user = await db.user.create({
       data: {
         email: data.email, fullName: data.fullName, phone: data.phone, passwordHash,
-        roles: { create: { role: 'MEMBER' } },
+        roles: { create: { role } },
       },
       include: { roles: true },
     });

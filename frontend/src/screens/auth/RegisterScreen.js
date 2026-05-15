@@ -8,20 +8,20 @@ import { Button, Input } from '../../components/UI';
 import { COLORS } from '../../utils/theme';
 
 const ROLES = [
-  { key: 'community_member', label: '🎓 Community Member', desc: 'Report facility issues' },
-  { key: 'worker', label: '🔧 Maintenance Worker', desc: 'Fix assigned issues' },
-  { key: 'facility_manager', label: '📋 Facility Manager', desc: 'Manage all issues' },
+  { key: 'MEMBER',  label: '🎓 Community Member',  desc: 'Report facility issues' },
+  { key: 'WORKER',  label: '🔧 Maintenance Worker', desc: 'Fix assigned issues' },
+  { key: 'MANAGER', label: '📋 Facility Manager',   desc: 'Triage and assign issues' },
 ];
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone_number: '', role: '' });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '', role: 'MEMBER' });
   const [loading, setLoading] = useState(false);
 
-  const update = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const update = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
   const handleRegister = async () => {
-    if (!form.name || !form.email || !form.password || !form.role) {
+    if (!form.fullName || !form.email || !form.password || !form.role) {
       Alert.alert('Missing Fields', 'Please fill in all required fields and select a role.');
       return;
     }
@@ -32,7 +32,14 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await register({ ...form, email: form.email.trim().toLowerCase() });
+      const payload = {
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        fullName: form.fullName.trim(),
+        role: form.role,
+      };
+      if (form.phone.trim()) payload.phone = form.phone.trim();
+      await register(payload);
     } catch (err) {
       const msg = err.response?.data?.error || 'Registration failed. Please try again.';
       Alert.alert('Registration Failed', msg);
@@ -53,13 +60,13 @@ export default function RegisterScreen({ navigation }) {
         </View>
 
         <View style={styles.form}>
-          <Input label="Full Name *" placeholder="Omar Ahmed" value={form.name} onChangeText={v => update('name', v)} />
-          <Input label="Email Address *" placeholder="omar@giu-uni.de" value={form.email} onChangeText={v => update('email', v)} keyboardType="email-address" autoCapitalize="none" />
-          <Input label="Password *" placeholder="Min. 6 characters" value={form.password} onChangeText={v => update('password', v)} secureTextEntry />
-          <Input label="Phone Number (Optional)" placeholder="+20 1xx xxx xxxx" value={form.phone_number} onChangeText={v => update('phone_number', v)} keyboardType="phone-pad" />
+          <Input label="Full Name *" placeholder="Omar Ahmed" value={form.fullName} onChangeText={(v) => update('fullName', v)} />
+          <Input label="Email Address *" placeholder="omar@giu-uni.de" value={form.email} onChangeText={(v) => update('email', v)} keyboardType="email-address" autoCapitalize="none" />
+          <Input label="Password *" placeholder="Min. 6 characters" value={form.password} onChangeText={(v) => update('password', v)} secureTextEntry />
+          <Input label="Phone Number (Optional)" placeholder="+20 1xx xxx xxxx" value={form.phone} onChangeText={(v) => update('phone', v)} keyboardType="phone-pad" />
 
           <Text style={styles.roleLabel}>Select Your Role *</Text>
-          {ROLES.map(role => (
+          {ROLES.map((role) => (
             <TouchableOpacity
               key={role.key}
               style={[styles.roleCard, form.role === role.key && styles.roleCardSelected]}
