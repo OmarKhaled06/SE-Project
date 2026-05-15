@@ -163,17 +163,17 @@ function SplashScreen() {
 
 // ── Root Navigator ───────────────────────────────
 export default function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
 
   if (loading) return <SplashScreen />;
 
   const getRoleNavigator = () => {
     if (!user) return <AuthStack />;
-    switch (user.role) {
-      case 'community_member': return <CommunityTabs />;
-      case 'facility_manager': return <ManagerTabs />;
-      case 'worker': return <WorkerTabs />;
-      case 'admin': return <AdminStack />;
+    switch (role) {
+      case 'MEMBER':  return <CommunityTabs />;
+      case 'MANAGER': return <ManagerTabs />;
+      case 'WORKER':  return <WorkerTabs />;
+      case 'ADMIN':   return <AdminStack />;
       default: return <AuthStack />;
     }
   };
