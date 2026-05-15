@@ -1,11 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   RefreshControl, Alert, ScrollView, Image, TextInput
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { issuesAPI } from '../../services/api';
+import { issuesAPI, absoluteUrl } from '../../services/api';
 import { StatusBadge, PriorityBadge, EmptyState, LoadingScreen, Button } from '../../components/UI';
 import { COLORS } from '../../utils/theme';
 import { useAuth } from '../../utils/AuthContext';
@@ -20,9 +20,9 @@ export function WorkerIssuesScreen({ navigation }) {
   const fetchIssues = async () => {
     try {
       const res = await issuesAPI.getAssigned();
-      setIssues(res.data.tickets || []);
+      setIssues(res.data.issues || []);
     } catch (err) {
-      Alert.alert('Error', 'Failed to load assigned issues');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load assigned issues');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -31,34 +31,39 @@ export function WorkerIssuesScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => { fetchIssues(); }, []));
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  const formatDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.card, item.priority === 'high' && styles.cardHighPriority]}
-      onPress={() => navigation.navigate('WorkerIssueWork', { issueId: item.id })}
-    >
-      <View style={styles.cardTop}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{item.title || item.categories?.category_name || 'Issue'}</Text>
-        <StatusBadge status={item.status} />
-      </View>
-      <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
-      <View style={styles.cardMeta}>
-        <Text style={styles.metaText}>📍 {item.locations?.building_name || 'No location'}</Text>
-        <Text style={styles.metaText}>📅 {formatDate(item.created_at)}</Text>
-        <PriorityBadge priority={item.priority} />
-      </View>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }) => {
+    const isHigh = item.priority === 'HIGH' || item.priority === 'URGENT';
+    return (
+      <TouchableOpacity
+        style={[styles.card, isHigh && styles.cardHighPriority]}
+        onPress={() => navigation.navigate('WorkerIssueWork', { issueId: item.id })}
+      >
+        <View style={styles.cardTop}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          <StatusBadge status={item.status} />
+        </View>
+        <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
+        <View style={styles.cardMeta}>
+          <Text style={styles.metaText}>📍 {item.location || 'No location'}</Text>
+          <Text style={styles.metaText}>📅 {formatDate(item.createdAt)}</Text>
+          <PriorityBadge priority={item.priority} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) return <LoadingScreen />;
+
+  const activeCount = issues.filter((i) => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.workerName}>{user.name}</Text>
+          <Text style={styles.workerName}>{user?.fullName}</Text>
         </View>
         <TouchableOpacity onPress={() => Alert.alert('Logout', 'Are you sure?', [{ text: 'Cancel' }, { text: 'Logout', onPress: logout, style: 'destructive' }])}>
           <Text style={styles.logoutBtn}>Logout</Text>
@@ -66,14 +71,12 @@ export function WorkerIssuesScreen({ navigation }) {
       </View>
 
       <View style={styles.summaryBar}>
-        <Text style={styles.summaryText}>
-          {issues.filter(i => i.status !== 'resolved' && i.status !== 'closed').length} active tasks
-        </Text>
+        <Text style={styles.summaryText}>{activeCount} active task{activeCount === 1 ? '' : 's'}</Text>
       </View>
 
       <FlatList
         data={issues}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, issues.length === 0 && { flex: 1 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchIssues(); }} tintColor={COLORS.primary} />}
@@ -95,9 +98,9 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
   const fetchIssue = async () => {
     try {
       const res = await issuesAPI.getById(issueId);
-      setIssue(res.data.ticket);
+      setIssue(res.data.issue);
     } catch (err) {
-      Alert.alert('Error', 'Failed to load issue');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load issue');
     } finally {
       setLoading(false);
     }
@@ -107,15 +110,20 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
 
   const markInProgress = async () => {
     try {
-      await issuesAPI.updateStatus(issueId, 'in_progress');
+      await issuesAPI.updateStatus(issueId, 'IN_PROGRESS');
       Alert.alert('✅', 'Marked as In Progress');
       fetchIssue();
     } catch (err) {
-      Alert.alert('Error', 'Failed to update status');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update status');
     }
   };
 
   const pickCompletionPhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please grant camera access.');
+      return;
+    }
     const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
     if (!result.canceled) setPhoto(result.assets[0]);
   };
@@ -132,17 +140,19 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
       if (photo) {
         const formData = new FormData();
         const filename = photo.uri.split('/').pop();
-        formData.append('photo', { uri: photo.uri, name: filename, type: 'image/jpeg' });
-        await issuesAPI.uploadPhoto(issueId, formData);
-      } else {
-        await issuesAPI.updateStatus(issueId, 'resolved');
+        const match = /\.(\w+)$/.exec(filename || '');
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        formData.append('photo', { uri: photo.uri, name: filename || 'completion.jpg', type });
+        await issuesAPI.uploadPhoto(issueId, formData, 'COMPLETION');
       }
 
+      await issuesAPI.updateStatus(issueId, 'RESOLVED');
+
       Alert.alert('✅ Done!', 'Issue marked as resolved', [
-        { text: 'Back', onPress: () => navigation.goBack() }
+        { text: 'Back', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
-      Alert.alert('Error', 'Failed to submit completion');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to submit completion');
     } finally {
       setSubmitting(false);
     }
@@ -150,6 +160,8 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
 
   if (loading) return <LoadingScreen />;
   if (!issue) return null;
+
+  const reportPhoto = issue.photos?.find((p) => p.kind === 'REPORT');
 
   return (
     <ScrollView style={styles.container}>
@@ -166,26 +178,24 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
           <PriorityBadge priority={issue.priority} />
         </View>
 
-        <Text style={styles.issueTitle}>{issue.title || issue.categories?.category_name}</Text>
+        <Text style={styles.issueTitle}>{issue.title}</Text>
         <Text style={styles.issueDesc}>{issue.description}</Text>
 
-        {issue.photo_url && (
-          <Image source={{ uri: issue.photo_url }} style={styles.issuePhoto} resizeMode="cover" />
+        {reportPhoto && (
+          <Image source={{ uri: absoluteUrl(reportPhoto.url) }} style={styles.issuePhoto} resizeMode="cover" />
         )}
 
         <View style={styles.locationCard}>
           <Text style={styles.locationLabel}>📍 Location</Text>
-          <Text style={styles.locationValue}>
-            {issue.locations ? `${issue.locations.building_name}${issue.locations.room_number ? ` · Room ${issue.locations.room_number}` : ''}${issue.locations.floor ? ` · Floor ${issue.locations.floor}` : ''}` : 'Not specified'}
-          </Text>
+          <Text style={styles.locationValue}>{issue.location || 'Not specified'}</Text>
         </View>
 
         {/* Actions */}
-        {issue.status === 'pending' && (
+        {(issue.status === 'PENDING' || issue.status === 'ASSIGNED') && (
           <Button title="🔧 Start Working (Mark In Progress)" onPress={markInProgress} style={styles.actionBtn} />
         )}
 
-        {issue.status === 'in_progress' && (
+        {issue.status === 'IN_PROGRESS' && (
           <View style={styles.completionSection}>
             <Text style={styles.sectionTitle}>Mark as Complete</Text>
 
@@ -222,9 +232,9 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
           </View>
         )}
 
-        {(issue.status === 'resolved' || issue.status === 'closed') && (
+        {(issue.status === 'RESOLVED' || issue.status === 'CLOSED') && (
           <View style={styles.resolvedBanner}>
-            <Text style={styles.resolvedText}>✅ This issue has been {issue.status}</Text>
+            <Text style={styles.resolvedText}>✅ This issue has been {issue.status.toLowerCase()}</Text>
           </View>
         )}
 
@@ -232,11 +242,11 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
         {issue.comments?.length > 0 && (
           <View style={styles.commentsSection}>
             <Text style={styles.sectionTitle}>Work Log</Text>
-            {issue.comments.map(c => (
+            {issue.comments.map((c) => (
               <View key={c.id} style={styles.commentCard}>
-                <Text style={styles.commentAuthor}>{c.user?.name}</Text>
-                <Text style={styles.commentText}>{c.content}</Text>
-                <Text style={styles.commentDate}>{new Date(c.created_at).toLocaleString()}</Text>
+                <Text style={styles.commentAuthor}>{c.author?.fullName}</Text>
+                <Text style={styles.commentText}>{c.body}</Text>
+                <Text style={styles.commentDate}>{new Date(c.createdAt).toLocaleString()}</Text>
               </View>
             ))}
           </View>
@@ -246,12 +256,9 @@ export function WorkerIssueWorkScreen({ route, navigation }) {
   );
 }
 
-// Import useEffect for WorkerIssueWorkScreen
-import { useEffect } from 'react';
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { backgroundColor: COLORS.primary, paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20 },
+  header: { backgroundColor: COLORS.primary, paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   backText: { color: '#FFFFFF99', fontSize: 14, marginBottom: 8 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
   greeting: { fontSize: 14, color: '#FFFFFF99' },
