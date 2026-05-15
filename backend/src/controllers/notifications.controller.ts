@@ -15,3 +15,12 @@ export async function markRead(req: AuthedRequest, res: Response, next: NextFunc
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
+export async function markOneRead(req: AuthedRequest, res: Response, next: NextFunction) {
+  try {
+    await db.notification.updateMany({
+      where: { id: req.params.id, userId: req.user!.id },
+      data: { read: true },
+    });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}

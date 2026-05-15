@@ -5,4 +5,5 @@ const r = Router();
 r.use(requireAuth);
 r.get('/', c.list);
 r.put('/read-all', c.markRead);
+r.put('/:id/read', c.markOneRead);
 export default r;
