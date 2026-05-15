@@ -15,9 +15,11 @@ r.use(requireAuth);
  */
 r.get('/', c.list);
 r.get('/my', c.listMine);
+r.get('/assigned', c.listAssigned);
 r.get('/:id', c.get);
 r.post('/', c.create);
 r.put('/:id/status', c.setStatus);
+r.put('/:id/priority', c.setPriority);
 r.put('/:id/assign', c.assign);
 r.put('/:id/close', c.close);
 r.post('/:id/comments', c.comment);

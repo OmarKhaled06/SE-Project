@@ -9,27 +9,27 @@ import { StatusBadge, PriorityBadge, EmptyState, LoadingScreen } from '../../com
 import { COLORS } from '../../utils/theme';
 import { useAuth } from '../../utils/AuthContext';
 
-const STATUS_FILTERS = ['all', 'pending', 'in_progress', 'resolved', 'closed'];
+const STATUS_FILTERS = ['ALL', 'PENDING', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 
 export default function ManagerDashboardScreen({ navigation }) {
   const { user, logout } = useAuth();
   const [issues, setIssues] = useState([]);
-  const [stats, setStats] = useState({ total: 0, pending: 0, in_progress: 0, resolved: 0 });
+  const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, in_progress: 0, resolved: 0, closed: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
   const fetchData = async () => {
     try {
-      const params = activeFilter !== 'all' ? { status: activeFilter } : {};
+      const params = activeFilter !== 'ALL' ? { status: activeFilter } : {};
       const [issuesRes, statsRes] = await Promise.all([
         issuesAPI.getAll(params),
-        managerAPI.getStats()
+        managerAPI.getStats(),
       ]);
-      setIssues(issuesRes.data.tickets || []);
+      setIssues(issuesRes.data.issues || []);
       setStats(statsRes.data.stats || {});
     } catch (err) {
-      Alert.alert('Error', 'Failed to load dashboard');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load dashboard');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -40,7 +40,7 @@ export default function ManagerDashboardScreen({ navigation }) {
 
   const onRefresh = () => { setRefreshing(true); fetchData(); };
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  const formatDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
@@ -49,8 +49,8 @@ export default function ManagerDashboardScreen({ navigation }) {
     >
       <View style={styles.cardTop}>
         <View style={styles.cardTopLeft}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title || item.categories?.category_name || 'Issue'}</Text>
-          <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
         </View>
         <View style={styles.cardBadges}>
           <StatusBadge status={item.status} />
@@ -58,13 +58,13 @@ export default function ManagerDashboardScreen({ navigation }) {
       </View>
       <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
       <View style={styles.cardMeta}>
-        <Text style={styles.metaText}>📍 {item.locations?.building_name || 'No location'}</Text>
-        <Text style={styles.metaText}>🏷 {item.categories?.category_name || 'General'}</Text>
+        <Text style={styles.metaText}>📍 {item.location || 'No location'}</Text>
+        <Text style={styles.metaText}>🏷 {item.category || 'General'}</Text>
         <PriorityBadge priority={item.priority} />
       </View>
-      {item.worker && (
+      {item.assignee && (
         <View style={styles.workerRow}>
-          <Text style={styles.workerText}>👷 {item.worker.name}</Text>
+          <Text style={styles.workerText}>👷 {item.assignee.fullName}</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -74,63 +74,70 @@ export default function ManagerDashboardScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Welcome back,</Text>
-          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.name}>{user?.fullName}</Text>
         </View>
         <TouchableOpacity onPress={() => Alert.alert('Logout', 'Are you sure?', [{ text: 'Cancel' }, { text: 'Logout', onPress: logout, style: 'destructive' }])}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { borderTopColor: COLORS.textSecondary }]}>
-          <Text style={styles.statNum}>{stats.total || 0}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={[styles.statCard, { borderTopColor: COLORS.warning }]}>
-          <Text style={styles.statNum}>{stats.pending || 0}</Text>
-          <Text style={styles.statLabel}>Pending</Text>
-        </View>
-        <View style={[styles.statCard, { borderTopColor: COLORS.primaryLight }]}>
-          <Text style={styles.statNum}>{stats.in_progress || 0}</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
-        </View>
-        <View style={[styles.statCard, { borderTopColor: COLORS.success }]}>
-          <Text style={styles.statNum}>{stats.resolved || 0}</Text>
-          <Text style={styles.statLabel}>Resolved</Text>
-        </View>
+      <View style={styles.statsWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+          <View style={[styles.statCard, { borderTopColor: COLORS.textSecondary }]}>
+            <Text style={styles.statNum}>{stats.total || 0}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: COLORS.warning }]}>
+            <Text style={styles.statNum}>{stats.pending || 0}</Text>
+            <Text style={styles.statLabel}>Pending</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: '#4338CA' }]}>
+            <Text style={styles.statNum}>{stats.assigned || 0}</Text>
+            <Text style={styles.statLabel}>Assigned</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: COLORS.primaryLight }]}>
+            <Text style={styles.statNum}>{stats.in_progress || 0}</Text>
+            <Text style={styles.statLabel}>In Progress</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: COLORS.success }]}>
+            <Text style={styles.statNum}>{stats.resolved || 0}</Text>
+            <Text style={styles.statLabel}>Resolved</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: COLORS.textLight }]}>
+            <Text style={styles.statNum}>{stats.closed || 0}</Text>
+            <Text style={styles.statLabel}>Closed</Text>
+          </View>
+        </ScrollView>
       </View>
 
-      {/* Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={{ paddingHorizontal: 16 }}>
-        {STATUS_FILTERS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
-            onPress={() => setActiveFilter(f)}
-          >
-            <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>
-              {f === 'all' ? 'All Issues' : f.replace('_', ' ')}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.filtersWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
+          {STATUS_FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+              onPress={() => setActiveFilter(f)}
+            >
+              <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>
+                {f === 'ALL' ? 'All Issues' : f.replace('_', ' ')}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
-      {/* Issues List */}
       <FlatList
         data={issues}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, issues.length === 0 && { flex: 1 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         ListEmptyComponent={<EmptyState icon="📋" title="No Issues Found" subtitle="No issues match the selected filter" />}
       />
 
-      {/* Workers Button */}
       <TouchableOpacity style={styles.workersBtn} onPress={() => navigation.navigate('Workers')}>
         <Text style={styles.workersBtnText}>👷 Manage Workers</Text>
       </TouchableOpacity>
@@ -147,21 +154,24 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 14, color: '#FFFFFF99' },
   name: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
   logoutText: { color: COLORS.secondary, fontWeight: '700', fontSize: 14 },
-  statsRow: { flexDirection: 'row', padding: 16, gap: 8 },
+  statsWrap: { paddingVertical: 12 },
+  statsRow: { paddingHorizontal: 16, gap: 8, alignItems: 'flex-start' },
   statCard: {
-    flex: 1, backgroundColor: COLORS.surface, borderRadius: 12, padding: 12,
-    borderTopWidth: 3, alignItems: 'center',
+    width: 96, minHeight: 78, backgroundColor: COLORS.surface, borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 12,
+    borderTopWidth: 3, alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, elevation: 2,
   },
-  statNum: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary },
-  statLabel: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2, fontWeight: '600' },
-  filters: { maxHeight: 50, marginBottom: 4 },
+  statNum: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary, lineHeight: 26 },
+  statLabel: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4, fontWeight: '600', textAlign: 'center' },
+  filtersWrap: { paddingVertical: 8, marginBottom: 4 },
+  filtersRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   filterChip: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: COLORS.surface, marginRight: 8, borderWidth: 1.5, borderColor: COLORS.border,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: COLORS.surface, borderWidth: 1.5, borderColor: COLORS.border,
   },
   filterChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  filterChipText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'capitalize' },
+  filterChipText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
   filterChipTextActive: { color: '#FFFFFF' },
   list: { padding: 16 },
   card: {

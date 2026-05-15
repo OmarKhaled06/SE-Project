@@ -15,7 +15,7 @@ export default function WorkersScreen({ navigation }) {
       const res = await managerAPI.getWorkers();
       setWorkers(res.data.workers || []);
     } catch (err) {
-      Alert.alert('Error', 'Failed to load workers');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load workers');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -25,41 +25,43 @@ export default function WorkersScreen({ navigation }) {
   useFocusEffect(useCallback(() => { fetchWorkers(); }, []));
 
   const toggleStatus = (worker) => {
-    const action = worker.is_active ? 'deactivate' : 'activate';
-    Alert.alert(`${action.charAt(0).toUpperCase() + action.slice(1)} Worker`,
-      `Are you sure you want to ${action} ${worker.name}?`, [
+    const action = worker.active ? 'deactivate' : 'activate';
+    const verb   = action.charAt(0).toUpperCase() + action.slice(1);
+    Alert.alert(`${verb} Worker`, `Are you sure you want to ${action} ${worker.fullName}?`, [
       { text: 'Cancel' },
-      { text: action.charAt(0).toUpperCase() + action.slice(1), style: worker.is_active ? 'destructive' : 'default',
+      {
+        text: verb,
+        style: worker.active ? 'destructive' : 'default',
         onPress: async () => {
           try {
-            await managerAPI.updateWorkerStatus(worker.id, !worker.is_active);
+            await managerAPI.updateWorkerStatus(worker.id, !worker.active);
             fetchWorkers();
           } catch (err) {
-            Alert.alert('Error', 'Failed to update worker status');
+            Alert.alert('Error', err.response?.data?.error || 'Failed to update worker status');
           }
-        }
-      }
+        },
+      },
     ]);
   };
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.cardLeft}>
-        <View style={[styles.avatar, { backgroundColor: item.is_active ? COLORS.primary : COLORS.textLight }]}>
-          <Text style={styles.avatarText}>{item.name?.charAt(0)?.toUpperCase()}</Text>
+        <View style={[styles.avatar, { backgroundColor: item.active ? COLORS.primary : COLORS.textLight }]}>
+          <Text style={styles.avatarText}>{item.fullName?.charAt(0)?.toUpperCase()}</Text>
         </View>
         <View>
-          <Text style={styles.name}>{item.name}</Text>
+          <Text style={styles.name}>{item.fullName}</Text>
           <Text style={styles.email}>{item.email}</Text>
-          {item.phone_number && <Text style={styles.phone}>📞 {item.phone_number}</Text>}
+          {item.phone && <Text style={styles.phone}>📞 {item.phone}</Text>}
         </View>
       </View>
       <TouchableOpacity
-        style={[styles.statusBtn, { backgroundColor: item.is_active ? '#FEE2E2' : '#D1FAE5' }]}
+        style={[styles.statusBtn, { backgroundColor: item.active ? '#FEE2E2' : '#D1FAE5' }]}
         onPress={() => toggleStatus(item)}
       >
-        <Text style={[styles.statusBtnText, { color: item.is_active ? COLORS.danger : COLORS.success }]}>
-          {item.is_active ? 'Deactivate' : 'Activate'}
+        <Text style={[styles.statusBtnText, { color: item.active ? COLORS.danger : COLORS.success }]}>
+          {item.active ? 'Deactivate' : 'Activate'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -78,7 +80,7 @@ export default function WorkersScreen({ navigation }) {
       </View>
       <FlatList
         data={workers}
-        keyExtractor={w => w.id}
+        keyExtractor={(w) => w.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, workers.length === 0 && { flex: 1 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchWorkers(); }} tintColor={COLORS.primary} />}
