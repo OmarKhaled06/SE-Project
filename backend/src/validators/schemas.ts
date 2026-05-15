@@ -4,6 +4,7 @@ export const registerSchema = z.object({
   password: z.string().min(6).max(72),
   fullName: z.string().trim().min(2).max(100),
   phone: z.string().trim().max(20).optional(),
+  role: z.enum(['MEMBER', 'MANAGER', 'WORKER']).optional(),
 });
 export const loginSchema = z.object({
   email: z.string().trim().email().max(255),
@@ -48,3 +49,6 @@ export const statusSchema = z.object({
 });
 export const assignSchema = z.object({ assigneeId: z.string().uuid().nullable() });
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(1000) });
+export const prioritySchema = z.object({
+  priority: z.enum(['LOW','MEDIUM','HIGH','URGENT']),
+});
