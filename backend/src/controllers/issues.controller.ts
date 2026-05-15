@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { db } from '../config/db';
 import { AuthedRequest } from '../middleware/auth';
-import { issueSchema, statusSchema, assignSchema, commentSchema } from '../validators/schemas';
+import { issueSchema, statusSchema, assignSchema, commentSchema, prioritySchema } from '../validators/schemas';
 import { notify } from '../services/notify';
 
 const isStaff = (req: AuthedRequest) =>
@@ -14,11 +14,28 @@ export async function list(req: AuthedRequest, res: Response, next: NextFunction
     const where: any = {};
     if (!isStaff(req)) where.reporterId = req.user!.id;
     else if (req.user!.roles.includes('WORKER') && !isManager(req)) where.assigneeId = req.user!.id;
+    if (typeof req.query.status === 'string') where.status = req.query.status;
     const issues = await db.issue.findMany({
       where, orderBy: { createdAt: 'desc' },
       include: { reporter: { select: { id: true, fullName: true, email: true } },
                  assignee: { select: { id: true, fullName: true, email: true } },
+                 photos: true,
                  _count: { select: { comments: true, photos: true } } },
+    });
+    res.json({ issues });
+  } catch (e) { next(e); }
+}
+
+export async function listAssigned(req: AuthedRequest, res: Response, next: NextFunction) {
+  try {
+    const issues = await db.issue.findMany({
+      where: { assigneeId: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        reporter: { select: { id: true, fullName: true, email: true } },
+        assignee: { select: { id: true, fullName: true, email: true } },
+        photos: true,
+      },
     });
     res.json({ issues });
   } catch (e) { next(e); }
@@ -28,6 +45,7 @@ export async function listMine(req: AuthedRequest, res: Response, next: NextFunc
   try {
     const issues = await db.issue.findMany({
       where: { reporterId: req.user!.id }, orderBy: { createdAt: 'desc' },
+      include: { photos: true, assignee: { select: { id: true, fullName: true, email: true } } },
     });
     res.json({ issues });
   } catch (e) { next(e); }
@@ -41,7 +59,7 @@ export async function get(req: AuthedRequest, res: Response, next: NextFunction)
         reporter: { select: { id: true, fullName: true, email: true } },
         assignee: { select: { id: true, fullName: true, email: true } },
         photos: true,
-        comments: { include: { author: { select: { id: true, fullName: true, email: true } } }, orderBy: { createdAt: 'asc' } },
+        comments: { include: { author: { select: { id: true, fullName: true, email: true, roles: true } } }, orderBy: { createdAt: 'asc' } },
       },
     });
     if (!issue) return res.status(404).json({ error: 'Not found' });
@@ -71,6 +89,15 @@ export async function setStatus(req: AuthedRequest, res: Response, next: NextFun
   } catch (e) { next(e); }
 }
 
+export async function setPriority(req: AuthedRequest, res: Response, next: NextFunction) {
+  try {
+    if (!isManager(req)) return res.status(403).json({ error: 'Forbidden' });
+    const { priority } = prioritySchema.parse(req.body);
+    const issue = await db.issue.update({ where: { id: req.params.id }, data: { priority } });
+    res.json({ issue });
+  } catch (e) { next(e); }
+}
+
 export async function assign(req: AuthedRequest, res: Response, next: NextFunction) {
   try {
     if (!isManager(req)) return res.status(403).json({ error: 'Forbidden' });
@@ -96,8 +123,11 @@ export async function close(req: AuthedRequest, res: Response, next: NextFunctio
 export async function comment(req: AuthedRequest, res: Response, next: NextFunction) {
   try {
     const { body } = commentSchema.parse(req.body);
-    const c = await db.comment.create({ data: { issueId: req.params.id, authorId: req.user!.id, body } });
-    res.status(201).json({ comment: c });
+    const created = await db.comment.create({
+      data: { issueId: req.params.id, authorId: req.user!.id, body },
+      include: { author: { select: { id: true, fullName: true, email: true, roles: true } } },
+    });
+    res.status(201).json({ comment: created });
   } catch (e) { next(e); }
 }
 

@@ -3,12 +3,9 @@ import {
   View, Text, StyleSheet, ScrollView, Image,
   TouchableOpacity, Alert, Modal, FlatList
 } from 'react-native';
-import { issuesAPI, managerAPI } from '../../services/api';
+import { issuesAPI, managerAPI, absoluteUrl, PRIORITIES, STATUSES } from '../../services/api';
 import { StatusBadge, PriorityBadge, Button, LoadingScreen } from '../../components/UI';
 import { COLORS } from '../../utils/theme';
-
-const STATUSES = ['pending', 'in_progress', 'resolved', 'closed'];
-const PRIORITIES = ['low', 'medium', 'high'];
 
 export default function ManagerIssueDetailScreen({ route, navigation }) {
   const { issueId } = route.params;
@@ -23,12 +20,12 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
     try {
       const [issueRes, workersRes] = await Promise.all([
         issuesAPI.getById(issueId),
-        managerAPI.getWorkers()
+        managerAPI.getWorkers(),
       ]);
-      setIssue(issueRes.data.ticket);
+      setIssue(issueRes.data.issue);
       setWorkers(workersRes.data.workers || []);
     } catch (err) {
-      Alert.alert('Error', 'Failed to load issue');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load issue');
     } finally {
       setLoading(false);
     }
@@ -39,8 +36,8 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
   const handleAssign = async (worker) => {
     setShowAssignModal(false);
     try {
-      await issuesAPI.assign(issueId, worker.id);
-      Alert.alert('✅ Assigned', `Issue assigned to ${worker.name}`);
+      await issuesAPI.assign(issueId, worker ? worker.id : null);
+      Alert.alert('✅ Assigned', worker ? `Issue assigned to ${worker.fullName}` : 'Issue unassigned');
       fetchIssue();
     } catch (err) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to assign issue');
@@ -54,7 +51,7 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
       Alert.alert('✅ Updated', `Status updated to ${status.replace('_', ' ')}`);
       fetchIssue();
     } catch (err) {
-      Alert.alert('Error', 'Failed to update status');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update status');
     }
   };
 
@@ -64,46 +61,52 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
       await issuesAPI.setPriority(issueId, priority);
       fetchIssue();
     } catch (err) {
-      Alert.alert('Error', 'Failed to update priority');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update priority');
     }
   };
 
   const handleClose = () => {
-    Alert.alert('Close Issue', 'Mark this issue as closed and resolved?', [
+    Alert.alert('Close Issue', 'Mark this issue as closed?', [
       { text: 'Cancel' },
-      { text: 'Close Issue', style: 'destructive', onPress: async () => {
-        try {
-          await issuesAPI.close(issueId);
-          Alert.alert('✅ Closed', 'Issue has been closed');
-          navigation.goBack();
-        } catch (err) {
-          Alert.alert('Error', 'Failed to close issue');
-        }
-      }}
+      {
+        text: 'Close Issue', style: 'destructive', onPress: async () => {
+          try {
+            await issuesAPI.close(issueId);
+            Alert.alert('✅ Closed', 'Issue has been closed');
+            navigation.goBack();
+          } catch (err) {
+            Alert.alert('Error', err.response?.data?.error || 'Failed to close issue');
+          }
+        },
+      },
     ]);
   };
 
   const handleDelete = () => {
     Alert.alert('Delete Issue', 'This action cannot be undone.', [
       { text: 'Cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try {
-          await issuesAPI.delete(issueId);
-          navigation.goBack();
-        } catch (err) {
-          Alert.alert('Error', 'Failed to delete issue');
-        }
-      }}
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await issuesAPI.delete(issueId);
+            navigation.goBack();
+          } catch (err) {
+            Alert.alert('Error', err.response?.data?.error || 'Failed to delete issue');
+          }
+        },
+      },
     ]);
   };
 
   if (loading) return <LoadingScreen />;
   if (!issue) return null;
 
+  const reportPhoto     = issue.photos?.find((p) => p.kind === 'REPORT');
+  const completionPhoto = issue.photos?.find((p) => p.kind === 'COMPLETION');
+
   return (
     <View style={styles.container}>
       <ScrollView>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backText}>← Back</Text>
@@ -117,74 +120,47 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
             <PriorityBadge priority={issue.priority} />
           </View>
 
-          <Text style={styles.title}>{issue.title || issue.categories?.category_name}</Text>
+          <Text style={styles.title}>{issue.title}</Text>
           <Text style={styles.desc}>{issue.description}</Text>
 
-          {issue.photo_url && (
-            <Image source={{ uri: issue.photo_url }} style={styles.photo} resizeMode="cover" />
+          {reportPhoto && (
+            <Image source={{ uri: absoluteUrl(reportPhoto.url) }} style={styles.photo} resizeMode="cover" />
           )}
 
-          {/* Info */}
           <View style={styles.infoSection}>
-            <InfoRow label="Reported By" value={issue.reporter?.name || 'Unknown'} />
-            <InfoRow label="Category" value={issue.categories?.category_name || 'General'} />
-            <InfoRow label="Location" value={issue.locations ? `${issue.locations.building_name} ${issue.locations.room_number || ''}` : 'Not set'} />
-            <InfoRow label="Assigned To" value={issue.worker?.name || 'Unassigned'} />
-            <InfoRow label="Submitted" value={new Date(issue.created_at).toLocaleDateString('en-GB')} />
+            <InfoRow label="Reported By" value={issue.reporter?.fullName || 'Unknown'} />
+            <InfoRow label="Category" value={issue.category || 'General'} />
+            <InfoRow label="Location" value={issue.location || 'Not set'} />
+            <InfoRow label="Assigned To" value={issue.assignee?.fullName || 'Unassigned'} />
+            <InfoRow label="Submitted" value={new Date(issue.createdAt).toLocaleDateString('en-GB')} />
           </View>
 
-          {/* Action Buttons */}
           <Text style={styles.actionsLabel}>Actions</Text>
 
-          <Button
-            title="👷 Assign to Worker"
-            onPress={() => setShowAssignModal(true)}
-            style={styles.actionBtn}
-          />
-          <Button
-            title="🔄 Update Status"
-            onPress={() => setShowStatusModal(true)}
-            variant="outline"
-            style={styles.actionBtn}
-          />
-          <Button
-            title="⚡ Set Priority"
-            onPress={() => setShowPriorityModal(true)}
-            variant="outline"
-            style={styles.actionBtn}
-          />
-          {issue.status !== 'closed' && (
-            <Button
-              title="✅ Close Issue"
-              onPress={handleClose}
-              variant="secondary"
-              style={styles.actionBtn}
-            />
+          <Button title="👷 Assign to Worker" onPress={() => setShowAssignModal(true)} style={styles.actionBtn} />
+          <Button title="🔄 Update Status"   onPress={() => setShowStatusModal(true)}   variant="outline" style={styles.actionBtn} />
+          <Button title="⚡ Set Priority"     onPress={() => setShowPriorityModal(true)} variant="outline" style={styles.actionBtn} />
+          {issue.status !== 'CLOSED' && (
+            <Button title="✅ Close Issue" onPress={handleClose} variant="secondary" style={styles.actionBtn} />
           )}
-          <Button
-            title="🗑 Delete Issue"
-            onPress={handleDelete}
-            variant="danger"
-            style={styles.actionBtn}
-          />
+          <Button title="🗑 Delete Issue" onPress={handleDelete} variant="danger" style={styles.actionBtn} />
 
-          {/* Comments */}
           {issue.comments?.length > 0 && (
             <View style={styles.commentsSection}>
               <Text style={styles.commentsLabel}>Comments ({issue.comments.length})</Text>
-              {issue.comments.map(c => (
+              {issue.comments.map((c) => (
                 <View key={c.id} style={styles.commentCard}>
-                  <Text style={styles.commentAuthor}>{c.user?.name}</Text>
-                  <Text style={styles.commentText}>{c.content}</Text>
+                  <Text style={styles.commentAuthor}>{c.author?.fullName}</Text>
+                  <Text style={styles.commentText}>{c.body}</Text>
                 </View>
               ))}
             </View>
           )}
 
-          {issue.completion_photo_url && (
+          {completionPhoto && (
             <View style={{ marginTop: 16 }}>
               <Text style={styles.actionsLabel}>✅ Completion Photo</Text>
-              <Image source={{ uri: issue.completion_photo_url }} style={styles.photo} />
+              <Image source={{ uri: absoluteUrl(completionPhoto.url) }} style={styles.photo} />
             </View>
           )}
         </View>
@@ -196,17 +172,20 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>Select Worker</Text>
             <FlatList
-              data={workers.filter(w => w.is_active)}
-              keyExtractor={w => w.id}
+              data={workers.filter((w) => w.active)}
+              keyExtractor={(w) => w.id}
               renderItem={({ item }) => (
                 <TouchableOpacity style={styles.modalItem} onPress={() => handleAssign(item)}>
-                  <Text style={styles.modalItemText}>👷 {item.name}</Text>
+                  <Text style={styles.modalItemText}>👷 {item.fullName}</Text>
                   <Text style={styles.modalItemSub}>{item.email}</Text>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={<Text style={styles.emptyModal}>No active workers found</Text>}
             />
-            <Button title="Cancel" onPress={() => setShowAssignModal(false)} variant="outline" />
+            {issue.assignee && (
+              <Button title="Unassign" onPress={() => handleAssign(null)} variant="outline" style={{ marginTop: 8 }} />
+            )}
+            <Button title="Cancel" onPress={() => setShowAssignModal(false)} variant="outline" style={{ marginTop: 8 }} />
           </View>
         </View>
       </Modal>
@@ -216,9 +195,9 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>Update Status</Text>
-            {STATUSES.map(s => (
+            {STATUSES.map((s) => (
               <TouchableOpacity key={s} style={[styles.modalItem, issue.status === s && styles.modalItemActive]} onPress={() => handleStatusUpdate(s)}>
-                <Text style={[styles.modalItemText, { textTransform: 'capitalize' }]}>{s.replace('_', ' ')}</Text>
+                <Text style={styles.modalItemText}>{s.replace('_', ' ')}</Text>
               </TouchableOpacity>
             ))}
             <Button title="Cancel" onPress={() => setShowStatusModal(false)} variant="outline" style={{ marginTop: 8 }} />
@@ -231,9 +210,9 @@ export default function ManagerIssueDetailScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>Set Priority</Text>
-            {PRIORITIES.map(p => (
+            {PRIORITIES.map((p) => (
               <TouchableOpacity key={p} style={[styles.modalItem, issue.priority === p && styles.modalItemActive]} onPress={() => handlePriorityUpdate(p)}>
-                <Text style={[styles.modalItemText, { textTransform: 'capitalize' }]}>{p}</Text>
+                <Text style={styles.modalItemText}>{p}</Text>
               </TouchableOpacity>
             ))}
             <Button title="Cancel" onPress={() => setShowPriorityModal(false)} variant="outline" style={{ marginTop: 8 }} />
