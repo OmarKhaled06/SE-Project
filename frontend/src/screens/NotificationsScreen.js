@@ -4,9 +4,9 @@ import {
   TouchableOpacity, RefreshControl, Alert
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { notificationsAPI } from '../../services/api';
-import { LoadingScreen, EmptyState } from '../../components/UI';
-import { COLORS } from '../../utils/theme';
+import { notificationsAPI } from '../services/api';
+import { LoadingScreen, EmptyState } from '../components/UI';
+import { COLORS } from '../utils/theme';
 
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
@@ -18,7 +18,7 @@ export default function NotificationsScreen() {
       const res = await notificationsAPI.getAll();
       setNotifications(res.data.notifications || []);
     } catch (err) {
-      Alert.alert('Error', 'Failed to load notifications');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load notifications');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -31,14 +31,14 @@ export default function NotificationsScreen() {
     try {
       await notificationsAPI.markAllRead();
       fetchNotifications();
-    } catch (err) {}
+    } catch (e) {}
   };
 
   const markRead = async (id) => {
     try {
       await notificationsAPI.markRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    } catch (err) {}
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    } catch (e) {}
   };
 
   const formatDate = (d) => {
@@ -46,29 +46,28 @@ export default function NotificationsScreen() {
     const date = new Date(d);
     const now = new Date();
     const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
+    const diffMins  = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+    const diffDays  = Math.floor(diffHours / 24);
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${diffDays}d ago`;
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
-      style={[styles.card, !item.is_read && styles.cardUnread]}
-      onPress={() => markRead(item.id)}
+      style={[styles.card, !item.read && styles.cardUnread]}
+      onPress={() => !item.read && markRead(item.id)}
     >
       <View style={styles.cardLeft}>
-        <View style={[styles.dot, !item.is_read && styles.dotUnread]} />
+        <View style={[styles.dot, !item.read && styles.dotUnread]} />
         <View style={styles.cardContent}>
-          <Text style={[styles.message, !item.is_read && styles.messageUnread]}>
-            {item.message}
-          </Text>
-          <Text style={styles.time}>{formatDate(item.created_at)}</Text>
+          <Text style={[styles.title, !item.read && styles.titleUnread]}>{item.title}</Text>
+          <Text style={styles.message}>{item.body}</Text>
+          <Text style={styles.time}>{formatDate(item.createdAt)}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -95,7 +94,7 @@ export default function NotificationsScreen() {
 
       <FlatList
         data={notifications}
-        keyExtractor={n => n.id}
+        keyExtractor={(n) => n.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, notifications.length === 0 && { flex: 1 }]}
         refreshControl={
@@ -137,7 +136,8 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.border, marginTop: 5, marginRight: 12 },
   dotUnread: { backgroundColor: COLORS.primary },
   cardContent: { flex: 1 },
-  message: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 },
-  messageUnread: { color: COLORS.textPrimary, fontWeight: '600' },
-  time: { fontSize: 11, color: COLORS.textLight, marginTop: 4 },
+  title: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '600' },
+  titleUnread: { color: COLORS.textPrimary, fontWeight: '700' },
+  message: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginTop: 2 },
+  time: { fontSize: 11, color: COLORS.textLight, marginTop: 6 },
 });

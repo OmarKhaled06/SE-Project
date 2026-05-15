@@ -53,16 +53,18 @@ export const Card = ({ children, style }) => (
 );
 
 // ── StatusBadge ─────────────────────────────────
+// Backend statuses are uppercase enum strings: PENDING, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED.
 export const StatusBadge = ({ status }) => {
+  const key = String(status || '').toUpperCase();
   const colors = {
-    pending: { bg: '#FEF3C7', text: '#D97706' },
-    in_progress: { bg: '#DBEAFE', text: '#2563EB' },
-    resolved: { bg: '#D1FAE5', text: '#059669' },
-    closed: { bg: '#F3F4F6', text: '#6B7280' },
+    PENDING:     { bg: '#FEF3C7', text: '#D97706' },
+    ASSIGNED:    { bg: '#E0E7FF', text: '#4338CA' },
+    IN_PROGRESS: { bg: '#DBEAFE', text: '#2563EB' },
+    RESOLVED:    { bg: '#D1FAE5', text: '#059669' },
+    CLOSED:      { bg: '#F3F4F6', text: '#6B7280' },
   };
-  const c = colors[status] || colors.pending;
-  const label = status?.replace('_', ' ').toUpperCase();
-
+  const c = colors[key] || colors.PENDING;
+  const label = key.replace('_', ' ');
   return (
     <View style={[styles.badge, { backgroundColor: c.bg }]}>
       <Text style={[styles.badgeText, { color: c.text }]}>{label}</Text>
@@ -72,16 +74,17 @@ export const StatusBadge = ({ status }) => {
 
 // ── PriorityBadge ───────────────────────────────
 export const PriorityBadge = ({ priority }) => {
+  const key = String(priority || '').toUpperCase();
   const colors = {
-    low: { bg: '#D1FAE5', text: '#059669' },
-    medium: { bg: '#FEF3C7', text: '#D97706' },
-    high: { bg: '#FEE2E2', text: '#DC2626' },
+    LOW:    { bg: '#D1FAE5', text: '#059669' },
+    MEDIUM: { bg: '#FEF3C7', text: '#D97706' },
+    HIGH:   { bg: '#FEE2E2', text: '#DC2626' },
+    URGENT: { bg: '#FECACA', text: '#991B1B' },
   };
-  const c = colors[priority] || colors.medium;
-
+  const c = colors[key] || colors.MEDIUM;
   return (
     <View style={[styles.badge, { backgroundColor: c.bg }]}>
-      <Text style={[styles.badgeText, { color: c.text }]}>{priority?.toUpperCase()}</Text>
+      <Text style={[styles.badgeText, { color: c.text }]}>{key}</Text>
     </View>
   );
 };
