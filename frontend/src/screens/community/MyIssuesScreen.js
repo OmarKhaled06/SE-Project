@@ -7,8 +7,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { issuesAPI } from '../../services/api';
 import { StatusBadge, PriorityBadge, EmptyState, LoadingScreen } from '../../components/UI';
 import { COLORS } from '../../utils/theme';
+import { useAuth } from '../../utils/AuthContext';
 
 export default function MyIssuesScreen({ navigation }) {
+  const { logout, user } = useAuth();
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -16,9 +18,9 @@ export default function MyIssuesScreen({ navigation }) {
   const fetchIssues = async () => {
     try {
       const res = await issuesAPI.getMy();
-      setIssues(res.data.tickets || []);
+      setIssues(res.data.issues || []);
     } catch (err) {
-      Alert.alert('Error', 'Failed to load your issues');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to load your issues');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -40,21 +42,19 @@ export default function MyIssuesScreen({ navigation }) {
       onPress={() => navigation.navigate('IssueDetail', { issueId: item.id })}
     >
       <View style={styles.cardTop}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {item.title || item.categories?.category_name || 'Issue'}
-        </Text>
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title || 'Issue'}</Text>
         <StatusBadge status={item.status} />
       </View>
 
       <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
 
       <View style={styles.cardMeta}>
-        <Text style={styles.metaText}>📍 {item.locations?.building_name || 'No location'}</Text>
-        <Text style={styles.metaText}>📅 {formatDate(item.created_at)}</Text>
+        <Text style={styles.metaText}>📍 {item.location || 'No location'}</Text>
+        <Text style={styles.metaText}>📅 {formatDate(item.createdAt)}</Text>
       </View>
 
       <View style={styles.cardBottom}>
-        <Text style={styles.categoryText}>🏷 {item.categories?.category_name || 'General'}</Text>
+        <Text style={styles.categoryText}>🏷 {item.category || 'General'}</Text>
         <PriorityBadge priority={item.priority} />
       </View>
     </TouchableOpacity>
@@ -65,18 +65,29 @@ export default function MyIssuesScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.headerBar}>
-        <Text style={styles.headerTitle}>My Issues</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => navigation.navigate('SubmitIssue')}
-        >
-          <Text style={styles.addBtnText}>+ New</Text>
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.headerTitle}>My Issues</Text>
+          <Text style={styles.headerSub}>{user?.fullName}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('SubmitIssue')}
+          >
+            <Text style={styles.addBtnText}>+ New</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => Alert.alert('Logout', 'Sign out?', [{ text: 'Cancel' }, { text: 'Logout', onPress: logout, style: 'destructive' }])}
+            style={styles.logoutBtn}
+          >
+            <Text style={styles.logoutText}>⎋</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
         data={issues}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, issues.length === 0 && styles.listEmpty]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
@@ -100,11 +111,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  headerSub: { fontSize: 12, color: '#FFFFFF99', marginTop: 2 },
   addBtn: {
     backgroundColor: COLORS.secondary, paddingHorizontal: 16, paddingVertical: 8,
     borderRadius: 20,
   },
   addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  logoutBtn: { backgroundColor: '#FFFFFF22', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  logoutText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   list: { padding: 16 },
   listEmpty: { flex: 1 },
   card: {
